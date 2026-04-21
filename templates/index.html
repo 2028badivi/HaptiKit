@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HaptiKit | Fruit Detection</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>HaptiKit Fruit Detector</h1>
+            <div id="connection-status" class="status-indicator offline">Disconnected</div>
+        </header>
+
+        <main>
+            <div class="video-container">
+                <canvas id="video-canvas"></canvas>
+                <div id="detection-overlay" class="overlay no">
+                    <span id="detection-text">NOT DETECTED</span>
+                </div>
+            </div>
+
+            <div class="controls">
+                <div class="status-panel">
+                    <h3>Fruit Present?</h3>
+                    <div id="main-status-box" class="status-box no">
+                        <span id="main-status-text">NO</span>
+                    </div>
+                    <ul id="detected-list"></ul>
+                </div>
+
+                <div class="chat-panel">
+                    <h3>AI Assistant</h3>
+                    <div id="chat-messages" class="chat-messages">
+                        <div class="message ai">Hi! Ask me about what you see on the screen.</div>
+                    </div>
+                    <div class="chat-input-container">
+                        <input type="text" id="chat-input" placeholder="Type a message...">
+                        <button id="send-chat">Send</button>
+                    </div>
+                </div>
+
+                <div class="action-buttons">
+                    <button id="start-audio" class="btn primary">Start Audio Engine</button>
+                    <button id="record-btn" class="btn secondary">Start Recording</button>
+                    <p class="hint">Click "Start Audio Engine" to enable sound feedback.</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
