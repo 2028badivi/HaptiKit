@@ -7,3 +7,4 @@ flask-cors
 Flask-SocketIO
 mediapipe
 google-generativeai
+python-dotenv

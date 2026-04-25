@@ -5,6 +5,9 @@ import os
 from flask import Flask, render_template, Response, stream_with_context, request, jsonify
 from ultralytics import YOLO
 from groq import Groq
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -22,14 +25,22 @@ else:
 # Load YOLOv8 model
 model = YOLO('yolov8n.pt')
 
-# Target COCO classes (all)
-# FRUIT_CLASSES = [46, 47, 49, 50, 51] # REMOVED
-
 # Global state
 detection_state = {"object_detected": False, "detected_objects": []}
+conversation_history = []
+
+# MediaPipe Hands Setup (with fallback)
+hands = mp_hands = mp_draw = None
+try:
+    import mediapipe as mp
+    import mediapipe.solutions.hands as mp_hands
+    import mediapipe.solutions.drawing_utils as mp_draw
+    hands = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.5)
+except Exception as e:
+    print(f"MediaPipe Load Error: {e}")
 
 def get_video_stream():
-    """Generator for MJPEG video stream with digital pan/crop."""
+    """Generator for MJPEG video stream with YOLO and Hand Tracking."""
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("Error: Could not open camera.")
@@ -40,13 +51,12 @@ def get_video_stream():
         if not success:
             break
 
-        # EVEN TIGHTER SHIFT: Raw 1920x1080.
-        # Original: x 0-960 (too far left/too much side).
-        # New: x 100-1060 (shift center rightwards to get to true center).
-        frame = frame[180:900, 100:1060]
+        # Zoom/Crop logic if high-res
+        if frame.shape[1] > 1280:
+            frame = frame[180:900, 100:1060]
 
+        # YOLO Detection
         results = model.predict(frame, conf=0.4, verbose=False)
-        
         current_objects = []
         object_found = False
         
@@ -62,6 +72,14 @@ def get_video_stream():
         detection_state["object_detected"] = object_found
         detection_state["detected_objects"] = current_objects
 
+        # MediaPipe Hand Tracking (Overlay on the already annotated YOLO frame)
+        if hands:
+            rgb_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+            hand_results = hands.process(rgb_frame)
+            if hand_results.multi_hand_landmarks:
+                for hand_lms in hand_results.multi_hand_landmarks:
+                    mp_draw.draw_landmarks(annotated_frame, hand_lms, mp_hands.HAND_CONNECTIONS)
+        
         ret, buffer = cv2.imencode('.jpg', annotated_frame)
         frame_bytes = buffer.tobytes()
 
@@ -86,15 +104,6 @@ import serial
 SERIAL_PORT = '/dev/cu.usbmodem11201'
 BAUD_RATE = 9600
 
-# MediaPipe Hands Setup (with fallback)
-hands = mp_hands = mp_draw = None
-try:
-    import mediapipe as mp
-    from mediapipe.python.solutions import hands as mp_hands
-    from mediapipe.python.solutions import drawing_utils as mp_draw
-    hands = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.5)
-except Exception as e:
-    print(f"MediaPipe Load Error: {e}. ASL feed will use grayscale fallback.")
 
 # Global buffer for joystick and sensor data
 joy_state = {"x": 0, "y": 0, "sw": 1, "dist": 0, "m": 1}
@@ -131,31 +140,6 @@ def listen_to_arduino():
 # Start Arduino listener
 threading.Thread(target=listen_to_arduino, daemon=True).start()
 
-def get_video_stream():
-    """Generator for MJPEG video stream with Hand Tracking."""
-    cap = cv2.VideoCapture(0)
-    while True:
-        success, frame = cap.read()
-        if not success: break
-
-        # Only process if MP loaded
-        if hands:
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = hands.process(rgb_frame)
-            if results.multi_hand_landmarks:
-                for hand_lms in results.multi_hand_landmarks:
-                    mp_draw.draw_landmarks(frame, hand_lms, mp.solutions.hands.HAND_CONNECTIONS)
-        else:
-            # Fallback "AI" look: add crosshairs
-            h, w, _ = frame.shape
-            cv2.line(frame, (w//2-20, h//2), (w//2+20, h//2), (0,255,0), 2)
-            cv2.line(frame, (w//2, h//2-20), (w//2, h//2+20), (0,255,0), 2)
-        
-        ret, buffer = cv2.imencode('.jpg', frame)
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
-
-    cap.release()
 
 @app.route('/status')
 def status():
