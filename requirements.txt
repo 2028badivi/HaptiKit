@@ -2,3 +2,8 @@ flask
 opencv-python
 ultralytics
 numpy
+pyserial
+flask-cors
+Flask-SocketIO
+mediapipe
+google-generativeai

@@ -3,52 +3,97 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HaptiKit | Fruit Detection</title>
+    <title>Minimal OS | Joystick Controlled</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>HaptiKit Fruit Detector</h1>
-            <div id="connection-status" class="status-indicator offline">Disconnected</div>
-        </header>
+    <div id="desktop">
+        <!-- Icons -->
+        <div class="icon" data-name="System" style="top: 20px; left: 20px;">
+            <div class="icon-box"></div>
+            <span>System Status</span>
+        </div>
+        
+        <div class="icon" data-name="HaptiKit AI" style="top: 120px; left: 20px;">
+            <div class="icon-box highlight"></div>
+            <span>HaptiKit AI</span>
+        </div>
 
-        <main>
-            <div class="video-container">
-                <canvas id="video-canvas"></canvas>
-                <div id="detection-overlay" class="overlay no">
-                    <span id="detection-text">NOT DETECTED</span>
+        <div class="icon" data-name="ASL" style="top: 220px; left: 20px;">
+            <div class="icon-box asl"></div>
+            <span>ASL Translate</span>
+        </div>
+
+        <div class="icon" data-name="Trash" style="top: 20px; left: 120px;">
+            <div class="icon-box gray-icon"></div>
+            <span>Trash</span>
+        </div>
+
+        <!-- Windows -->
+        
+        <!-- System Status Window -->
+        <div id="system-window" class="window" style="display: none; top: 100px; left: 250px;">
+            <div class="window-header">
+                <span>System Status</span>
+                <button class="close-btn">X</button>
+            </div>
+            <div class="window-body">
+                <p>Sensor: <span id="dist-val">--</span> cm</p>
+                <p>Joystick: <span id="joy-val">0, 0</span></p>
+            </div>
+        </div>
+
+        <!-- HaptiKit AI Window -->
+        <div id="haptikit-ai-window" class="window" style="display: none; top: 120px; left: 270px;">
+            <div class="window-header">
+                <span>HaptiKit AI</span>
+                <button class="close-btn">X</button>
+            </div>
+            <div class="window-body">
+                <p class="ai-status">AI ENGINE: ONLINE</p>
+                <p>Detected: <span id="objects-val">Nothing</span></p>
+                <div class="video-preview">
+                    <img src="{{ url_for('video_feed') }}" width="100%">
                 </div>
             </div>
+        </div>
 
-            <div class="controls">
-                <div class="status-panel">
-                    <h3>Fruit Present?</h3>
-                    <div id="main-status-box" class="status-box no">
-                        <span id="main-status-text">NO</span>
-                    </div>
-                    <ul id="detected-list"></ul>
-                </div>
-
-                <div class="chat-panel">
-                    <h3>AI Assistant</h3>
-                    <div id="chat-messages" class="chat-messages">
-                        <div class="message ai">Hi! Ask me about what you see on the screen.</div>
-                    </div>
-                    <div class="chat-input-container">
-                        <input type="text" id="chat-input" placeholder="Type a message...">
-                        <button id="send-chat">Send</button>
-                    </div>
-                </div>
-
-                <div class="action-buttons">
-                    <button id="start-audio" class="btn primary">Start Audio Engine</button>
-                    <button id="record-btn" class="btn secondary">Start Recording</button>
-                    <p class="hint">Click "Start Audio Engine" to enable sound feedback.</p>
-                </div>
+        <!-- ASL Window -->
+        <div id="asl-window" class="window" style="display: none; top: 140px; left: 290px;">
+            <div class="window-header">
+                <span>ASL Translator</span>
+                <button class="close-btn">X</button>
             </div>
-        </main>
+            <div class="window-body">
+                <p>Translating live movements...</p>
+                <div class="video-preview">
+                     <img src="{{ url_for('video_feed') }}" width="100%" style="filter: grayscale(100%) contrast(150%);">
+                </div>
+                <p class="asl-output">Prediction: <span id="asl-pred">Waiting...</span></p>
+            </div>
+        </div>
+
+        <!-- Trash Window -->
+        <div id="trash-window" class="window" style="display: none; top: 160px; left: 310px;">
+            <div class="window-header">
+                <span>Recycle Bin</span>
+                <button class="close-btn">X</button>
+            </div>
+            <div class="window-body">
+                <p>The bin is empty.</p>
+                <p>Just like my thoughts.</p>
+            </div>
+        </div>
+
+        <!-- Taskbar -->
+        <div id="taskbar">
+            <button id="start-btn">Start</button>
+            <div id="clock">12:00 PM</div>
+        </div>
+
+        <!-- Custom Cursor -->
+        <div id="cursor"></div>
     </div>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>

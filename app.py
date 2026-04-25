@@ -10,7 +10,14 @@ app = Flask(__name__)
 
 # Groq API Configuration
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-client = Groq(api_key=GROQ_API_KEY)
+client = None
+if GROQ_API_KEY:
+    try:
+        client = Groq(api_key=GROQ_API_KEY)
+    except Exception as e:
+        print(f"Groq Init Error: {e}")
+else:
+    print("Warning: GROQ_API_KEY not found. AI Assistant features will be disabled.")
 
 # Load YOLOv8 model
 model = YOLO('yolov8n.pt')
@@ -78,43 +85,89 @@ import serial
 # Serial Configuration
 SERIAL_PORT = '/dev/cu.usbmodem11201'
 BAUD_RATE = 9600
-morse_buffer = {"last_signal": ""}
-conversation_history = []
+
+# MediaPipe Hands Setup (with fallback)
+hands = mp_hands = mp_draw = None
+try:
+    import mediapipe as mp
+    from mediapipe.python.solutions import hands as mp_hands
+    from mediapipe.python.solutions import drawing_utils as mp_draw
+    hands = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.5)
+except Exception as e:
+    print(f"MediaPipe Load Error: {e}. ASL feed will use grayscale fallback.")
+
+# Global buffer for joystick and sensor data
+joy_state = {"x": 0, "y": 0, "sw": 1, "dist": 0, "m": 1}
 
 def listen_to_arduino():
-    try:
-        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-        print(f"DEBUG: Connected to {SERIAL_PORT}")
-        while True:
-            if ser.in_waiting > 0:
+    while True:
+        try:
+            ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
+            # Standard reset sequence
+            ser.dtr = False; time.sleep(0.1); ser.dtr = True 
+            print(f"DEBUG: Listening at {BAUD_RATE} on {SERIAL_PORT}")
+            
+            while True:
                 line = ser.readline().decode('utf-8', errors='ignore').strip()
-                if line:
-                    # If it's a multi-character string (e.g., '..... |'), send it as individual chars
-                    # Or just send the whole thing to the frontend for processing.
-                    print(f"DEBUG: Passing raw line: '{line}'")
-                    morse_buffer["last_signal"] = line
-    except Exception as e:
-        print(f"Serial Error: {e}")
+                if line and "JS:" in line:
+                    try:
+                        # Extract the data after the JS: tag
+                        parts = line.split("JS:")
+                        raw_data = parts[-1].split(',')
+                        if len(raw_data) >= 5:
+                            # Your data shows center around 504, 527. 
+                            # We offset from 512 for standard feel.
+                            joy_state["x"] = int(raw_data[0]) - 504
+                            joy_state["y"] = int(raw_data[1]) - 527
+                            joy_state["sw"] = int(raw_data[2])
+                            joy_state["dist"] = float(raw_data[3])
+                            joy_state["m"] = int(raw_data[4])
+                    except Exception:
+                        pass
+        except Exception as e:
+            print(f"SERIAL ERROR: {e}")
+            time.sleep(1)
 
 # Start Arduino listener
 threading.Thread(target=listen_to_arduino, daemon=True).start()
 
-# ... existing code ...
+def get_video_stream():
+    """Generator for MJPEG video stream with Hand Tracking."""
+    cap = cv2.VideoCapture(0)
+    while True:
+        success, frame = cap.read()
+        if not success: break
+
+        # Only process if MP loaded
+        if hands:
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = hands.process(rgb_frame)
+            if results.multi_hand_landmarks:
+                for hand_lms in results.multi_hand_landmarks:
+                    mp_draw.draw_landmarks(frame, hand_lms, mp.solutions.hands.HAND_CONNECTIONS)
+        else:
+            # Fallback "AI" look: add crosshairs
+            h, w, _ = frame.shape
+            cv2.line(frame, (w//2-20, h//2), (w//2+20, h//2), (0,255,0), 2)
+            cv2.line(frame, (w//2, h//2-20), (w//2, h//2+20), (0,255,0), 2)
+        
+        ret, buffer = cv2.imencode('.jpg', frame)
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+
+    cap.release()
 
 @app.route('/status')
 def status():
     def generate():
         while True:
             current_state = {
+                "joy": joy_state,
                 "fruit_detected": detection_state["object_detected"],
-                "detected_objects": detection_state["detected_objects"],
-                "morse_signal": morse_buffer["last_signal"]
+                "detected_objects": detection_state["detected_objects"]
             }
-            # Clear signal after reading
-            morse_buffer["last_signal"] = ""
-            current_state_json = json.dumps(current_state)
-            yield f"data: {current_state_json}\n\n"
-            time.sleep(0.1)
+            yield f"data: {json.dumps(current_state)}\n\n"
+            time.sleep(0.02)
     return Response(stream_with_context(generate()), 
                     mimetype='text/event-stream')
 
@@ -126,6 +179,9 @@ def chat():
     
     detected_str = ", ".join(detection_state["detected_objects"]) if detection_state["detected_objects"] else "nothing"
     system_prompt = f"Direct HaptiKit assistant. Objects: {detected_str}. Respond under 15 words. Concise, no fluff."
+
+    if not client:
+        return jsonify({"response": "I'm offline (No API key found). But the joystick is working!"})
 
     try:
         completion = client.chat.completions.create(
@@ -141,4 +197,4 @@ def chat():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=False)
+    app.run(host='0.0.0.0', port=5002, debug=False)
