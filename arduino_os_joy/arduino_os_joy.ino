@@ -11,8 +11,9 @@ void setup() {
   pinMode(9, OUTPUT);   pinMode(2, OUTPUT);
   pinMode(3, INPUT_PULLUP);
   pinMode(13, OUTPUT);  pinMode(pinSW, INPUT_PULLUP); 
-  
-  // Use higher baud rate for smoother, more reliable mouse data
+
+
+  //i needed really high baud rate cuz the joystick needed high-precision data stream
   Serial.begin(115200); 
 }
 
@@ -23,12 +24,12 @@ void loop() {
     digitalWrite(13, HIGH); tone(2, 2000);
   }
     
-  // Ultrasonic with TIMEOUT to prevent mouse freezes
+  //timeout to prevent mouse from freezes
   digitalWrite(9, LOW); delayMicroseconds(2);
   digitalWrite(9, HIGH); delayMicroseconds(10);
   digitalWrite(9, LOW);
   
-  // Timeout of 20000us (20ms) is plenty for 300cm
+
   duration = pulseIn(10, HIGH, 20000); 
   distance = duration * 0.034 / 2;
 
@@ -37,7 +38,7 @@ void loop() {
   int swVal = digitalRead(pinSW);
   int mVal = digitalRead(pinMorse);
 
-  // JS:X,Y,SW,Dist,Morse
+
   Serial.print("JS:");
   Serial.print(xVal); Serial.print(",");
   Serial.print(yVal); Serial.print(",");
@@ -45,5 +46,5 @@ void loop() {
   Serial.print(distance); Serial.print(",");
   Serial.println(mVal);
 
-  delay(10); // Even faster for buttery smooth movement
+  delay(10);
 }

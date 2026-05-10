@@ -11,7 +11,6 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# Groq API Configuration
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 client = None
 if GROQ_API_KEY:
@@ -22,25 +21,28 @@ if GROQ_API_KEY:
 else:
     print("Warning: GROQ_API_KEY not found. AI Assistant features will be disabled.")
 
-# Load YOLOv8 model
 model = YOLO('yolov8n.pt')
 
-# Global state
 detection_state = {"object_detected": False, "detected_objects": []}
 conversation_history = []
 
-# MediaPipe Hands Setup (with fallback)
-hands = mp_hands = mp_draw = None
+hand_landmarker = face_landmarker = None
 try:
-    import mediapipe as mp
-    import mediapipe.solutions.hands as mp_hands
-    import mediapipe.solutions.drawing_utils as mp_draw
-    hands = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.5)
+    from mediapipe.tasks import python
+    from mediapipe.tasks.python import vision
+    
+    base_options_hands = python.BaseOptions(model_asset_path='models/hand_landmarker.task')
+    options_hands = vision.HandLandmarkerOptions(base_options=base_options_hands, num_hands=1)
+    hand_landmarker = vision.HandLandmarker.create_from_options(options_hands)
+
+    base_options_face = python.BaseOptions(model_asset_path='models/face_landmarker.task')
+    options_face = vision.FaceLandmarkerOptions(base_options=base_options_face, output_face_blendshapes=True)
+    face_landmarker = vision.FaceLandmarker.create_from_options(options_face)
+    print("MediaPipe Tasks API initialized successfully.")
 except Exception as e:
-    print(f"MediaPipe Load Error: {e}")
+    print(f"MediaPipe Tasks API Error: {e}")
 
 def get_video_stream():
-    """Generator for MJPEG video stream with YOLO and Hand Tracking."""
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("Error: Could not open camera.")
@@ -51,11 +53,9 @@ def get_video_stream():
         if not success:
             break
 
-        # Zoom/Crop logic if high-res
         if frame.shape[1] > 1280:
             frame = frame[180:900, 100:1060]
 
-        # YOLO Detection
         results = model.predict(frame, conf=0.4, verbose=False)
         current_objects = []
         object_found = False
@@ -72,13 +72,35 @@ def get_video_stream():
         detection_state["object_detected"] = object_found
         detection_state["detected_objects"] = current_objects
 
-        # MediaPipe Hand Tracking (Overlay on the already annotated YOLO frame)
-        if hands:
+        h, w, _ = annotated_frame.shape
+        if hand_landmarker or face_landmarker:
+            import mediapipe as mp
             rgb_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-            hand_results = hands.process(rgb_frame)
-            if hand_results.multi_hand_landmarks:
-                for hand_lms in hand_results.multi_hand_landmarks:
-                    mp_draw.draw_landmarks(annotated_frame, hand_lms, mp_hands.HAND_CONNECTIONS)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+            
+            if hand_landmarker:
+                hand_res = hand_landmarker.detect(mp_image)
+                if hand_res.hand_landmarks:
+                    for hand_lms in hand_res.hand_landmarks:
+                        for lm in hand_lms:
+                            cv2.circle(annotated_frame, (int(lm.x * w), int(lm.y * h)), 2, (0, 255, 0), -1)
+            
+            if face_landmarker:
+                face_res = face_landmarker.detect(mp_image)
+                if face_res.face_landmarks:
+                    mesh_coords = face_res.face_landmarks[0]
+                    if len(mesh_coords) > 473:
+                        li = mesh_coords[468] 
+                        ri = mesh_coords[473]
+                        eye_state["x"] = (li.x + ri.x) / 2
+                        eye_state["y"] = (li.y + ri.y) / 2
+                        
+                        if face_res.face_blendshapes:
+                            shapes = face_res.face_blendshapes[0]
+                            eye_state["blink"] = shapes[9].score > 0.5 or shapes[10].score > 0.5
+                        
+                        cv2.circle(annotated_frame, (int(li.x * w), int(li.y * h)), 3, (0, 255, 255), -1)
+                        cv2.circle(annotated_frame, (int(ri.x * w), int(ri.y * h)), 3, (0, 255, 255), -1)
         
         ret, buffer = cv2.imencode('.jpg', annotated_frame)
         frame_bytes = buffer.tobytes()
@@ -100,19 +122,16 @@ def video_feed():
 import threading
 import serial
 
-# Serial Configuration
 SERIAL_PORT = '/dev/cu.usbmodem11201'
 BAUD_RATE = 9600
 
-
-# Global buffer for joystick and sensor data
 joy_state = {"x": 0, "y": 0, "sw": 1, "dist": 0, "m": 1}
+eye_state = {"x": 0.5, "y": 0.5, "blink": False}
 
 def listen_to_arduino():
     while True:
         try:
             ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-            # Standard reset sequence
             ser.dtr = False; time.sleep(0.1); ser.dtr = True 
             print(f"DEBUG: Listening at {BAUD_RATE} on {SERIAL_PORT}")
             
@@ -120,12 +139,9 @@ def listen_to_arduino():
                 line = ser.readline().decode('utf-8', errors='ignore').strip()
                 if line and "JS:" in line:
                     try:
-                        # Extract the data after the JS: tag
                         parts = line.split("JS:")
                         raw_data = parts[-1].split(',')
                         if len(raw_data) >= 5:
-                            # Your data shows center around 504, 527. 
-                            # We offset from 512 for standard feel.
                             joy_state["x"] = int(raw_data[0]) - 504
                             joy_state["y"] = int(raw_data[1]) - 527
                             joy_state["sw"] = int(raw_data[2])
@@ -137,9 +153,7 @@ def listen_to_arduino():
             print(f"SERIAL ERROR: {e}")
             time.sleep(1)
 
-# Start Arduino listener
 threading.Thread(target=listen_to_arduino, daemon=True).start()
-
 
 @app.route('/status')
 def status():
@@ -147,6 +161,7 @@ def status():
         while True:
             current_state = {
                 "joy": joy_state,
+                "eye": eye_state,
                 "fruit_detected": detection_state["object_detected"],
                 "detected_objects": detection_state["detected_objects"]
             }

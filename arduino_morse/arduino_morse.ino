@@ -10,24 +10,24 @@ void setup() {
 void loop() {
   int buttonState = digitalRead(buttonPin);
 
-  if (buttonState == LOW && !isPressed) { // Pressed
+  if (buttonState == LOW && !isPressed) { // if its pressed then it would start the time to count for morse decoding\
     pressStartTime = millis();
     isPressed = true;
-    delay(50); // Debounce
+    delay(50); // I need to debounce it here to prevent incorrect button HIGH/LOW reading
   } 
-  else if (buttonState == HIGH && isPressed) { // Released
+  else if (buttonState == HIGH && isPressed) { // stop the timer cuz it's released the button
     unsigned long duration = millis() - pressStartTime;
     
-    // Dot: < 200ms, Dash: >= 200ms
+    // Dot woulld be: < 200ms, Dash: >= 200ms
     if (duration < 200) Serial.print(".");
     else Serial.print("-");
     
     isPressed = false;
   }
 
-  // If button not pressed for 800ms, send a pipe to trigger translation
+  // If button isnt  pressed for 800ms, then send a pipe to trigger translation
   if (buttonState == HIGH && !isPressed && millis() - pressStartTime > 800 && pressStartTime != 0) {
     Serial.println("|");
-    pressStartTime = 0; // Reset
+    pressStartTime = 0; // Reset now
   }
 }

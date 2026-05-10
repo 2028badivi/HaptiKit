@@ -1,43 +1,25 @@
-# HaptiKit Fruit Detector
+# HaptiKit OS 2.0
 
-A real-time computer vision project that detects fruits (apples, bananas, oranges) using YOLOv8 and provides interactive audio-visual feedback via a web interface.
+The first-ever remote to control your entire `operating system` (Haptic Interface) using `voice`, `eyes`, `hands`, and `haptics`. This haptic interface is meant to simulate Windows 95, and complete control of the computer to link multiple assistive technologies together into a cohesive unit.
 
-## Features
-- **Real-time Detection**: Uses YOLOv8 (Nano) for fast and accurate object classification.
-- **Web Interface**: Professional dark-themed dashboard with live MJPEG stream.
-- **Audio Feedback**: 
-  - **YES**: High-pitched chime when a fruit is detected.
-  - **NO**: Constant low-frequency throb when no fruit is present.
-- **Video Recording**: Capture the live stream directly from your browser.
-- **Robustness**: Handles camera errors and provides connection status indicators.
+HaptiKit AI: A simple application embedded into the HaptiKit OS that accurately spots daily assistive technology objects in real-time and uses sound and haptics to give you feedback. You can use the remote to send morse code to the AI to ask it to describe the environment around you, and it will respond in morse code through buzzing and vibrations.
 
-## Setup Instructions
+### Some Important Features
+* **Object Detection**: Instantly identifies common objects around you.
+* **Audio Feedback**: Plays a chime when an object is detected and a low hum when an object is not detected.
+* **Easy Recording**: Capture and save your live stream with one click.
 
-1. **Install Dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### Quick Start
+1. **Setup**: `pip install -r requirements.txt`
+2. **Run**: `python app.py`
+3. **Open**: Go to `http://localhost:5001` in your browser.
+4. **Arduino**: Upload the .ino scripts to your Arduino.
+5. **Wiring**: Complete the wiring for the remote (coming soon).
+6. **Activate**: Click **"Start Audio Engine"** to hear the sounds.
 
-2. **Run the Application**:
-   ```bash
-   python app.py
-   ```
-
-3. **Access the Dashboard**:
-   Open your browser and go to `http://localhost:5001`.
-
-4. **Enable Audio**:
-   Click the **"Start Audio Engine"** button on the page to initialize the Web Audio context (required by browsers to prevent auto-playing sounds).
-
-## How it Works
-- **Backend**: Flask serves the video feed from OpenCV. Each frame is processed by YOLOv8, and detection results are sent via Server-Sent Events (SSE) to the frontend.
-- **Frontend**: A `canvas` renders the MJPEG stream. The Web Audio API generates synthetic sounds in real-time based on the SSE status updates.
-- **Recording**: The browser's `MediaRecorder` API captures the canvas stream and saves it as a `.webm` file.
-
-## Target Objects
-The system is currently configured to look for:
-- Apples
-- Bananas
-- Oranges
-- Broccoli
-- Carrots
+### Functionality & Under the Hood
+**Flask** and **YOLOv8** handle the object detection and processing on the backend.
+**HaptiKit** uses **MediaPipe** for hand and eye tracking.
+**HaptiKit** uses **Grok API** to describe the objects and send it to the user in the form of morse code vibrations and sounds.
+**Flask** is used to link analog readings from the joystick to the Graphical User Interface (GUI).
+**Eye-Tracking** for OS navigation (blinking to click). (alternative to joystick)
